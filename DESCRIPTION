@@ -1,0 +1,23 @@
+Package: SimpleEnsemble
+Type: Package
+Title: Ensemble and Feature Selection Methods for Predictive Modeling
+Version: 0.1.0
+Date: 2024-05-01
+Authors: Deepti Mulbagal Venkatesh, Hamim Shabbir Halim, Keerthi
+        Bhaskara Sirapu, Saiteja Kalam
+Description: This package provides tools for building machine learning models.
+    It includes functionality for bagging (with bootstrap), ensemble learning (with stacking), 
+    and feature selection methods, allowing users to efficiently combine predictions from 
+    multiple models to improve predictive performance. Features include handling different types
+    of regression and classification models, and selection of top 'k' features.
+Depends: R (>= 3.5), glmnet, e1071, randomForest
+Imports: stats, utils
+Suggests: testthat, knitr
+License: GPL-3
+URL: https://example.com/SimpleEnsemble
+VignetteBuilder: knitr
+Encoding: UTF-8
+RoxygenNote: 7.3.1
+LazyData: true
+NeedsCompilation: no
+Packaged: 2024-05-03 20:51:45 UTC; kalam

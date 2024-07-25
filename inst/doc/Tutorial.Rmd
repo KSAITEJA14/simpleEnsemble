@@ -1,0 +1,413 @@
+---
+title: "Using the SimpleEnsemble Package"
+author: "Group 21"
+output: 
+  rmarkdown::pdf_document:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Using the SimpleEnsemble Package}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+Introduction
+------------
+
+`SimpleEnsemble` is designed to simplify the process of creating ensemble models. This vignette demonstrates how to use this package to build ensemble models. This package supports linear, logistic, lasso, ridge, elastic net, and support vector machines. It also provides various functionalities such as fine tuning linear models, find top K predictors, perform bagging with bootstrapping, create and combine ensemble models using a meta learner.
+The authors of this package are graduate students at Stony Brook University. Those are Deepti Mulbagal Venkatesh, Hamim Shabbir Halim, Keerthi Bhaskara Sirapu, and Saiteja Kalam. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE)
+library(SimpleEnsemble)
+```
+
+The development of the "SimpleEnsemble" package adheres to principles of reproducibility and modularity, ensuring that the package is both dependable and versatile. While the package can be accommodated with much more feature base, our aim to satisfy the project requirements for the course AMS597:Statistical Computing at SBU. 
+The structure of "SimpleEnsemble" is thoughtfully organized into four distinct modules, each serving a specific function within the ensemble modeling process:
+
+1. **Models Module**: This core module houses all the machine learning models supported by the package. It provides a robust foundation for building predictive models, including linear regression, logistic regression, ridge regression, lasso regression, elastic net, and support vector machines.
+
+2. **Bagging Module**: Dedicated to the implementation of the bagging technique, this module facilitates bootstrap sampling and aggregation. It allows users to enhance the stability and accuracy of their machine learning models by reducing variance and preventing overfitting.
+
+3. **Ensemble Module**: This module is designed to integrate various predictive models into a cohesive ensemble framework. It provides functionality to combine predictions from multiple models, using techniques like averaging or more complex methods like stacking, thereby leveraging the strengths of individual models to improve overall performance.
+
+4. **Preprocessing Module**: Essential for effective model training, this module includes the `pre.screen` function, which assists in selecting the top 'K' predictors. This function is useful when a dataset has significantly more predictors than the number of data points. This feature selection process is crucial for simplifying models, improving their interpretability, and reducing computational demands. 
+
+By compartmentalizing functionalities into these modules, "SimpleEnsemble" not only enhances the user experience through a clean and organized interface but also promotes ease of maintenance and scalability. Users can navigate the package intuitively, applying complex ensemble techniques with straightforward commands.
+
+Models
+-------
+The `fit.model` function is designed to be a versatile tool in the "SimpleEnsemble" R package. This function exemplifies the integration of traditional statistical methods with modern machine learning techniques, enabling users to fit a wide range of predictive models using custom parameters for tuning and optimization.
+
+### Overview of `fit.model`
+
+The function allows for the fitting of several types of predictive models, including:
+
+- **Linear Models:** Suitable for continuous outcomes where the relationship between predictors and the response is assumed to be linear.
+- **Logistic Models:** Used for binary classification tasks where the outcome is categorical with two classes (e.g., success/failure).
+- **Ridge and Lasso Models:** These are regularization methods that help in handling multicollinearity, model overfitting, and feature selection by introducing a penalty term to the loss function.
+- **Elastic Net Models:** Combines penalties of lasso and ridge regression, ideal for situations where there are correlations among features.
+- **Support Vector Machines (SVM):** Offers flexibility through the use of different kernels and can be used for both classification and regression tasks.
+
+### Function Parameters
+
+- `X`: The predictor variables matrix, where each column represents a feature and each row represents an observation.
+- `y`: The response or target variable, which can be continuous for regression tasks or binary for classification tasks.
+- `model.type`: Specifies the type of model to fit. The function supports 'linear', 'logistic', 'ridge', 'lasso', 'elastic', and 'svm'.
+- `alpha`: The mixing parameter relevant for elastic net, which balances the weight of ridge and lasso regularization components.
+- `lambda`: The regularization parameter controlling the amount of shrinkage: larger values specify stronger regularization. If not specified, cross-validation is used to determine the optimal lambda automatically for ridge, lasso, and elastic net models.
+- `intercept`: A logical value indicating whether to include an intercept term in the model.
+- `kernel`: Specifies the type of kernel to be used in SVM models. Options include 'linear', 'polynomial', 'radial', and 'sigmoid'.
+
+### Error Handling
+
+Comprehensive error handling ensures that the function inputs are valid, enhancing robustness:
+- Checks if `X` is a matrix and `y` is a vector.
+- Validates that `model.type` and `kernel` are among the supported options.
+- Checks the appropriateness of `alpha` values.
+
+### Examples of fit.model function in Models.R 
+
+#### Regression task, continuous response variable
+
+For all the models below (except linear and svm), lambda is found using cross validation, when explicitly not specified by user.
+```{r testing-fit.model}
+X <- as.matrix(mtcars[, 2:8])
+y <- mtcars$mpg
+print(y)
+
+model.ridge <- fit.model(X, y, model.type = "ridge")
+coef(model.ridge)
+
+model.lasso <- fit.model(X, y, model.type = "lasso", lambda = 0.002)
+coef(model.lasso)
+ 
+model.linear <- fit.model(X, y, model.type = "linear")
+coef(model.linear)
+
+model.elastic <- fit.model(X, y, model.type = "elastic")
+coef(model.elastic)
+
+model.svm <- fit.model(X, y, model.type = "svm")
+#you can use this model object of SVM type to predict.
+```
+
+#### Classification task, binary response variable
+```{r fit.model - example classification models}
+X <- as.matrix(mtcars[, 1:7])
+y <- as.integer(mtcars$am)
+print(y)
+
+model.logistic <- fit.model(X, y, model.type = "logistic")
+coef(model.logistic)
+
+model.ridge <- fit.model(X, y, model.type = "ridge")
+coef(model.ridge)
+
+model.lasso <- fit.model(X, y, model.type = "lasso")
+coef(model.lasso)
+
+model.elastic <- fit.model(X, y, model.type = "elastic")
+coef(model.elastic)
+
+model.svm <- fit.model(X, y, model.type = "svm")
+#you can use this model object of SVM type to predict.
+```
+
+
+Bagging
+--------
+The bagging function provided is designed to be a versatile tool for both regression and classification problems in R, capable of handling a variety of predictive modeling techniques including linear models, logistic regression, ridge regression, lasso regression, elastic-net models, and SVMs. The function employs the bootstrap aggregation (bagging) technique to improve model stability and accuracy by reducing variance and avoiding overfitting.
+
+### Key Features
+
+**Model Flexibility**: The function supports multiple model types, making it broadly applicable for different types of predictive modeling tasks. Users can specify the model type according to their data and the problem context.
+
+**Regularization**: For models like ridge, lasso, and elastic-net, parameters `alpha` and `lambda` are provided to control the regularization strength and the mix of L1 and L2 penalties, helping in feature selection and preventing overfitting.
+
+**Feature Importance**: An importance threshold can be set, below which features can be excluded from the model. This is particularly useful in scenarios where reducing model complexity could enhance generalizability.
+
+**Multiple Combining Methods**: The function allows for different methods to combine model predictions, one is averaging (method = "average") where the final predictions are average of all the prediction vectors from each model which results from a particular bootstrap sample. Another is The other is using a meta learner (method = "stacking"), where each prediction vector of a model (from a given bootstrap sample), is given as input to a support vector machines (svm) and the original response variable (y), is given as target variable to meta learner (svm). This will reduce the workload of the user. 
+
+**Intercept Management**: Users have the option to include or exclude the intercept in the model, providing additional flexibility depending on whether data are centered or if modeling constraints require its exclusion.
+
+**Variable Importance**: The `bag()` function in the provided code snippet calculates variable importance based on the absolute values of coefficients derived from the models fitted within the bagging algorithm. This importance measurement is determined within the bootstrapping loop for models that include coefficients such as ridge, lasso, and elastic net models.
+A variable importance matrix (zero matrix) of size (nrow = no.of predictors * ncol = no.of bootstrap samples) is initiated. 
+Breakdown of how variable importance is calculated:
+
+1. **Bootstrapping and Model Fitting**:
+   - The function performs bootstrapping, which involves repeatedly sampling from the dataset with replacement. For each bootstrap sample, a specified model is fitted.
+   
+2. **Importance Calculation**:
+   - If the method is linear or logistic: a variable with a non-zero coefficient is considered important.
+   - If the method is ridge, lasso, elastic: a variable is considered important if the coefficient is greater than a certain threshold (which is 1e-4.)
+   - If a variable is important, the designated placeholder with be changed to 1 in variable importance matrix.
+
+3. **Aggregation**:
+   - After all bootstrapping iterations are complete, the variable importances across all samples are aggregated to provide a final importance measure for each variable. This is sum (on rows) of the importance measures across the bootstrapped models.
+
+This approach allows for assessing which features contribute most significantly to the model, aiding in feature selection and understanding model behavior. The use of absolute coefficients as importance measures is particularly common in regularization models like lasso and ridge, where the magnitude of coefficients directly relates to the strength of each feature's effect after accounting for multicollinearity and overfitting control through penalties.
+
+### Examples of bag function in Bagging.R 
+#### Classification task - Binary response variable
+
+```{r Bagging - classification:defauit (stacking)}
+
+data <- read.csv("H:/My Drive/Spring24/AMS597/SimpleEnsembleGroup21/SimpleEnsembleGroup21/data/Enigma.csv", header = TRUE)
+
+# Define X and y
+X <- data[,1:13]
+y <- as.vector(data$y)
+
+# Split the data into training and testing sets
+set.seed(123) # for reproducibility
+
+# Create the training set indices using createDataPartition
+library(caret)
+training_samples <- createDataPartition(y, p=0.75, list=FALSE)
+
+# Define training and testing sets
+X_train <- as.matrix(X[training_samples, ])
+y_train <- y[training_samples]
+X_test <- as.matrix(X[-training_samples, ])
+y_test <- y[-training_samples]
+result1 <- SimpleEnsemble::bag(X_train, y_train, X_test,y_test, model.type = "lasso", R = 10)
+print(paste("train accuracy:", result1$combined.train.metric))
+print(paste("test accuracy:", result1$combined.test.metric))
+print(result1$importances)
+```
+```{r Bagging - classification:majority}
+result1 <- SimpleEnsemble::bag(X_train, y_train, X_test,y_test, model.type = "lasso", R = 10, combine.method = "majority")
+print(paste("train accuracy:", result1$combined.train.metric))
+print(paste("test accuracy:", result1$combined.test.metric))
+print(result1$importances)
+```
+#### Regression task - Continuous response variable
+
+```{r Bagging - regression:defauit (stacking)}
+# Load the data
+data <- read.csv("H:/My Drive/Spring24/AMS597/SimpleEnsembleGroup21/SimpleEnsembleGroup21/data/QuestionMark.csv", header = TRUE)
+
+
+# Define X and y
+X <- data[, -which(names(data) == "w4")]
+y <- as.vector(data$y)
+
+# Split the data into training and testing sets
+set.seed(123) # for reproducibility
+training_samples <- createDataPartition(y, p=0.75, list=FALSE)
+
+# Define training and testing sets
+X_train <- as.matrix(X[training_samples, ])
+y_train <- y[training_samples]
+X_test <- as.matrix(X[-training_samples, ])
+y_test <- y[-training_samples]
+
+
+result1 <- SimpleEnsemble::bag(X_train, y_train, X_test,y_test, model.type = "elastic", R = 10)
+print(paste("train RMSE:", result1$combined.train.metric))
+print(paste("test RMSE:", result1$combined.test.metric))
+print(result1$importances)
+```
+```{r Bagging:average}
+result1 <- SimpleEnsemble::bag(X_train, y_train, X_test,y_test, model.type = "elastic", R = 10, combine.method = "average")
+print(paste("train RMSE:", result1$combined.train.metric))
+print(paste("train RMSE:", result1$combined.test.metric))
+print(result1$importances)
+```
+
+Top K features
+---------------
+
+The `pre.screen()` function is a powerful tool for feature selection designed to operate with different types of response variables and apply several statistical methods for determining feature relevance. The function is versatile, supporting methods suitable for both continuous and categorical data, and it's structured to handle binary responses with specific methods.
+
+### Function Description
+
+The `pre.screen()` function selects the top `k` most relevant features from a given dataset based on the specified method of feature selection. It supports four main methods:
+**PCA (Principal Component Analysis)**
+Suitable for: Continuous X
+Response (y): Works with both continuous and binary, mainly to reduce dimensionality without consideration of y.
+Details: PCA does not inherently consider the relationship between predictors and the response variable; it's primarily used for dimensionality reduction or feature extraction based on variance.
+**Random Forest**
+Suitable for: Both continuous and binary X
+Response (y): Works with both continuous and binary responses.
+Details: Random Forest is versatile as it can handle various types of data and compute feature importance based on the decrease in node impurity.
+**Correlation**
+Suitable for: Continuous X
+Response (y): Continuous only.
+Details: Correlation measures the strength and direction of a linear relationship between two continuous variables. Not suitable for categorical data unless converted to dummy variables which can distort the analysis.
+**Chi-Square**
+Suitable for: Categorical/binary X
+Response (y): Categorical/binary only.
+Details: Chi-square tests are used to determine whether there's a significant association between two categorical variables. It requires frequency counts from categorical/binary data.
+
+### Parameters
+
+- **X**: A matrix of predictor variables.
+- **y**: A vector representing the response variable.
+- **k**: The number of features to select. Must not exceed the number of columns in `X`.
+- **method**: The method used for feature selection. Must be one of "correlation", "chi-square", "pca", or "randomForest".
+
+### Returns
+
+A list containing:
+- **selected.indices**: Indices of the selected features.
+- **selected.data**: The subset of `X` corresponding to the selected features.
+
+### Error Handling
+
+The function includes robust error handling to ensure that the inputs are appropriate for the selected method:
+- Checks if `X` is a matrix and `y` is a vector.
+- Validates that the number of features to select does not exceed the number of available predictors.
+- Ensures that the specified method is supported.
+- Verifies data types and structures are suitable for the selected method, e.g., numeric predictors for correlation, categorical predictors for chi-square.
+
+### Examples for pre.screen function in Preprocessing.R
+
+```{r top k: data}
+data <- read.delim("https://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt", header=TRUE, sep='\t')
+data$Group <- ifelse(data$Group == "ALL", 1, 0)
+```
+
+#### continuous X, continuous y
+```{r top k:continuous X, continuous y}
+y <- data$Gene2238
+X <- as.matrix(data[, -c(1,2238)])
+prescreen.result.corr <- pre.screen(X, y, 10, method = "correlation")
+print("correlation")
+print(prescreen.result.corr$selected.indices)
+
+prescreen.result.pca <- pre.screen(X, y, 10, method = "pca")
+print("pca")
+print(prescreen.result.pca$selected.indices)
+
+prescreen.result.rf <- pre.screen(X, y, 10, method = "randomForest")
+print("random forest")
+print(prescreen.result.rf$selected.indices)
+```
+
+#### continuous X, binary y
+```{r}
+y <- data$Group
+X <- as.matrix(data[, -c(1)])
+prescreen.result.rf.cont <- pre.screen(X, y, 10, method = "randomForest")
+print("random forest")
+print(prescreen.result.rf.cont$selected.indices)
+```
+
+
+```{r}
+data <- read.delim("https://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt", header=TRUE, sep='\t')
+data$Group <- ifelse(data$Group == "ALL", 1, 0)
+y <- as.vector(data$Gene1)
+X <- as.matrix(data[, -c(1,2)])
+prescreen.result <- pre.screen(X, y, 10, method = "chi-square")
+
+```
+
+Ensemble Learning
+------------------
+
+The `ensemble()` function in R is designed to facilitate ensemble learning by combining predictions from multiple predictive models. This function allows users to specify different types of models, such as linear regression, logistic regression, ridge regression, lasso regression, elastic net, and support vector machines (SVMs). The predictions from these models are then combined using either a simple averaging method or a more complex stacking method using an SVM as a meta-learner.
+
+### Function Details
+
+#### Parameters:
+
+- **X_train**: A numeric matrix containing the predictor variables. This matrix is required for fitting all the specified models.
+- **y_train**: A numeric vector of the response variable which the models predict.
+- **X_test**: A numeric matrix containing the predictor variables. This matrix is required for predicting values all the specified models.
+- **y_test**: An optional numeric vector of the response variable, to evaluate model.
+- **model.specs**: A list of lists where each inner list specifies the type of model to be fitted and its parameters. Each list must specify:
+  - `model`: Type of model (e.g., "linear", "logistic", etc.).
+  - `alpha`, `lambda`: Regularization parameters, applicable for ridge, lasso, and elastic net models. These should be set to `NULL` if not used.
+  - `intercept`: Indicates whether to include an intercept in the model.
+  - `kernel`: Specifies the kernel type for SVM models.
+- **combine.method**: Method to combine model predictions. Options are:
+  - `"average"`: Calculates the simple average of predictions from all models.
+  - `"stacking"`: Uses an SVM to learn how to optimally combine the model predictions.
+
+#### Return:
+
+- A vector of predictions based on the chosen method for combining model outputs.
+
+#### Error Handling:
+
+- The function checks if `X` is a matrix and `y` is a vector, throwing an error if these conditions are not met.
+- It validates whether all specified models in `model.specs` are supported.
+
+
+### Examples for ensembele function in Ensemble.R
+#### Classification task
+```{r}
+# Load the data
+data <- read.csv("H:/My Drive/Spring24/AMS597/SimpleEnsembleGroup21/SimpleEnsembleGroup21/data/Enigma.csv", header = TRUE)
+
+# Define X and y
+X <- data[,1:13]
+y <- as.vector(data$y)
+
+# Split the data into training and testing sets
+set.seed(123) # for reproducibility
+
+# Create the training set indices using createDataPartition
+library(caret)
+training_samples <- createDataPartition(y, p=0.75, list=FALSE)
+
+# Define training and testing sets
+X_train <- as.matrix(X[training_samples, ])
+y_train <- y[training_samples]
+X_test <- as.matrix(X[-training_samples, ])
+y_test <- y[-training_samples]
+ 
+model.specs <- list(
+  list(model="ridge", lambda=0.1),
+  list(model="lasso", lambda=0.1),
+  list(model="svm", kernel="radial")
+)
+
+predictions <- SimpleEnsemble::ensemble(X_train, y_train, X_test, y_test, model.specs)
+print(paste("train accuracy:", predictions$combined.train.metric))
+print(paste("test accuracy:", predictions$combined.test.metric))
+```
+
+```{r}
+predictions <- SimpleEnsemble::ensemble(X_train, y_train, X_test, y_test, model.specs, combine.method = "majority")
+print(paste("train accuracy:", predictions$combined.train.metric))
+print(paste("test accuracy:", predictions$combined.test.metric))
+```
+
+#### Regression task
+```{r}
+# Load the data
+data <- read.csv("H:/My Drive/Spring24/AMS597/SimpleEnsembleGroup21/SimpleEnsembleGroup21/data/QuestionMark.csv", header = TRUE)
+
+
+# Define X and y
+X <- data[, -which(names(data) == "w4")]
+y <- as.vector(data$y)
+
+# Split the data into training and testing sets
+set.seed(123) # for reproducibility
+training_samples <- createDataPartition(y, p=0.75, list=FALSE)
+
+# Define training and testing sets
+X_train <- as.matrix(X[training_samples, ])
+y_train <- y[training_samples]
+X_test <- as.matrix(X[-training_samples, ])
+y_test <- y[-training_samples]
+
+model.specs <- list(
+  list(model="ridge", lambda=0.1),
+  list(model="lasso", lambda=0.1),
+  list(model="svm", kernel="radial")
+)
+
+result1 <- SimpleEnsemble::ensemble(X_train, y_train, X_test, y_test, model.specs)
+print(paste("train RMSE:", result1$combined.train.metric))
+print(paste("test RMSE:", result1$combined.test.metric))
+```
+
+```{r}
+result1 <- SimpleEnsemble::ensemble(X_train, y_train, X_test, y_test, model.specs, combine.method = "average")
+print(paste("train RMSE:", result1$combined.train.metric))
+print(paste("test RMSE:", result1$combined.test.metric))
+```
